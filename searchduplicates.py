@@ -1,4 +1,32 @@
-#! /usr/bin/python
+#!/usr/bin/env python2
+#! -*- encoding: utf-8 -*-
+
+LICENSE = """Copyright (c) 2012, Gereon Kaiping <anaphory@yahoo.de>
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+1. Redistributions of source code must retain the above copyright
+   notice, this list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright
+   notice, this list of conditions and the following disclaimer in the
+   documentation and/or other materials provided with the
+   distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+“AS IS” AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."""
 
 import os, os.path
 import sys
@@ -12,6 +40,24 @@ parser.add_argument('paths', metavar='PATH',
                     nargs="+",
                     type=str,
                     help='consider this path')
+
+parser.add_argument('--longest', '-l',
+                    action='store_const',
+                    dest='long',
+                    const=True, default=None,
+                    help='Assume that the original file has the longest path')
+
+parser.add_argument('--shortest', '-s',
+                    action='store_const',
+                    dest='long',
+                    const=False,
+                    help='Assume that the original file has the shortest path')
+
+parser.add_argument('--script', '-c',
+                    action='store_const',
+                    dest='script',
+                    const=True, default=False,
+                    help='Generate a bash script that replaces copies of the original by symbolic links to the original.')
 
 parser.add_argument('--flat', '-f',
                     action='store_const',
@@ -133,12 +179,17 @@ for aSet in potentialDupes:
         except IOError:
             continue
     if len(outFiles):
-        dupes.append(sorted(outFiles, key=len, reverse=True))
+        if args.long is None:
+            dupes.append(outFiles)
+        else:
+            dupes.append(sorted(outFiles, key=len, reverse=args.long))
 
-i = 0
 for d in dupes:
-    original = d[0]
-    print '# Original is %s' % original
-    for f in d[1:]:
-        i = i + 1
-        print 'rm %s && ln -s %s %s' % (f, os.path.relpath(original, f), f)
+    if args.script:
+        original = d[0]
+        print '# Assuming %s is the original.' % original
+        for f in d[1:]:
+            print 'rm %s && ln -s %s %s' % (f, os.path.relpath(original, os.path.dirname(f)), f)
+    else:
+        print "===="
+        print "\n".join(d)
