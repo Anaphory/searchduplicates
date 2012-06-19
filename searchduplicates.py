@@ -69,10 +69,15 @@ parser.add_argument('--verbose', '-v',
                     action='store_const',
                     const=False, default=True,)
 
+parser.add_argument('--iscopy', '-n',
+                    action='append',
+                    type=str,
+                    help='assume that files matching TEXT are copies')
+
 parser.add_argument('--exclude', '-x',
                     action='append',
                     type=str,
-                    help='exclued files matching TEXT')
+                    help='exclude files matching TEXT')
 
 args = parser.parse_args()
 
@@ -98,7 +103,7 @@ def files_by_size(path, filter_fn=(lambda x: True), min_size=100, follow_links=F
             size = os.stat(f)[stat.ST_SIZE]
             if size < min_size:
                 continue
-            try: 
+            try:
                 extend[size].append(f)
             except KeyError:
                 extend[size] = [f]
@@ -106,13 +111,13 @@ def files_by_size(path, filter_fn=(lambda x: True), min_size=100, follow_links=F
             continue
     return extend
 
-def exclude_filter_fn(x):
-    return not any([fnmatch.fnmatchcase(x, exclude) for exclude in args.exclude])
-    
+def multi_match_filter_fn(match=args.exclude):
+    return lambda x: not any([fnmatch.fnmatchcase(x, exclude) for exclude in match])
+
 for x in args.paths:
     print >>sys.stderr, 'Scanning directory "%s"....' % x
     files_by_size(x,
-                  filter_fn=exclude_filter_fn,
+                  filter_fn=multi_match_filter_fn(),
                   recursive=args.recursive,
                   extend=filesBySize)
 
@@ -180,16 +185,19 @@ for aSet in potentialDupes:
             continue
     if len(outFiles):
         if args.long is None:
-            dupes.append(outFiles)
+            dupes.append(sorted(outFiles,
+                key=multi_match_filter_fn(args.iscopy), reverse=True))
         else:
-            dupes.append(sorted(outFiles, key=len, reverse=args.long))
+            dupes.append(sorted(sorted(outFiles, key=len, reverse=args.long),
+                key=multi_match_filter_fn(args.iscopy), reverse=True))
 
 for d in dupes:
     if args.script:
         original = d[0]
         print '# Assuming %s is the original.' % original
         for f in d[1:]:
-            print 'rm %s && ln -s %s %s' % (f, os.path.relpath(original, os.path.dirname(f)), f)
+            # The following line still has problems with literal “'” in file names.
+            print "rm '%s' && ln -s '%s' '%s'" % (f, os.path.relpath(original, os.path.dirname(f)), f)
     else:
         print "===="
         print "\n".join(d)
