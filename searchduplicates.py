@@ -67,23 +67,25 @@ parser.add_argument('--flat', '-f',
 
 parser.add_argument('--verbose', '-v',
                     action='store_const',
-                    const=False, default=True,)
+                    default=False, const=True,)
 
-parser.add_argument('--iscopy', '-n',
+parser.add_argument('--notoriginal', '-n',
                     action='append',
                     type=str,
+                    default=[],
                     help='assume that files matching TEXT are copies')
 
 parser.add_argument('--exclude', '-x',
                     action='append',
                     type=str,
+                    default=[],
                     help='exclude files matching TEXT')
 
+# TODO: -x and -n behave differently:
+# -x cares only for the 'basename', -n for the full name.
+# Thus, -x .git behaves similarly to -n */.git
+
 args = parser.parse_args()
-
-
-if args.exclude is None:
-    args.exclude = []
 
 filesBySize = {}
 
@@ -96,7 +98,7 @@ def files_by_size(path, filter_fn=(lambda x: True), min_size=100, follow_links=F
         try:
             if not follow_links and os.path.islink(f):
                 continue
-            if os.path.isdir(f):
+            if recursive and os.path.isdir(f):
                 files_by_size(f, filter_fn, min_size, follow_links, True, extend)
             if not os.path.isfile(f):
                 continue
@@ -132,7 +134,8 @@ for k in sizes:
     outFiles = []
     hashes = {}
     if len(inFiles) is 1: continue
-    print >>sys.stderr, 'Testing %d files of size %d...' % (len(inFiles), k)
+    if args.verbose:
+        print >>sys.stderr, 'Testing %d files of size %d...' % (len(inFiles), k)
     for fileName in inFiles:
         try:
             if not os.path.isfile(fileName):
@@ -165,7 +168,8 @@ for aSet in potentialDupes:
     hashes = {}
     for fileName in aSet:
         try:
-            print >>sys.stderr, 'Scanning file "%s"...' % fileName
+            if args.verbose:
+                print >>sys.stderr, 'Scanning file "%s"...' % fileName
             aFile = file(fileName, 'r')
             hasher = md5.new()
             while True:
@@ -186,10 +190,10 @@ for aSet in potentialDupes:
     if len(outFiles):
         if args.long is None:
             dupes.append(sorted(outFiles,
-                key=multi_match_filter_fn(args.iscopy), reverse=True))
+                key=multi_match_filter_fn(args.notoriginal), reverse=True))
         else:
             dupes.append(sorted(sorted(outFiles, key=len, reverse=args.long),
-                key=multi_match_filter_fn(args.iscopy), reverse=True))
+                key=multi_match_filter_fn(args.notoriginal), reverse=True))
 
 for d in dupes:
     if args.script:
