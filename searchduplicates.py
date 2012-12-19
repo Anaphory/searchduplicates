@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python
 #! -*- encoding: utf-8 -*-
 
 LICENSE = """Copyright (c) 2012, Gereon Kaiping <anaphory@yahoo.de>
@@ -116,6 +116,13 @@ def files_by_size(path, filter_fn=(lambda x: True), min_size=100, follow_links=F
 def multi_match_filter_fn(match=args.exclude):
     return lambda x: not any([fnmatch.fnmatchcase(x, exclude) for exclude in match])
 
+def relpath_unless_via_root(path, start=".", roots=["/"]):
+    relpath = os.path.relpath(path, start)
+    for root in roots:
+        if os.path.relpath(path, root) in relpath:
+            return os.path.abspath(path)
+    return relpath
+
 for x in args.paths:
     print >>sys.stderr, 'Scanning directory "%s"....' % x
     files_by_size(x,
@@ -200,8 +207,8 @@ for d in dupes:
         original = d[0]
         print '# Assuming %s is the original.' % original
         for f in d[1:]:
-            # The following line still has problems with literal “'” in file names.
-            print "rm '%s' && ln -s '%s' '%s'" % (f, os.path.relpath(original, os.path.dirname(f)), f)
+            # The following line still has problems with literal “'” and “"” in file names.
+            print 'COPY="%s" ; rm "$COPY" && ln -s "%s" "$COPY"' % (f, relpath_unless_via_root(original, os.path.dirname(f), args.paths))
     else:
         print "===="
         print "\n".join(d)
