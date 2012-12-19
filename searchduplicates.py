@@ -31,7 +31,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."""
 import os, os.path
 import sys
 import stat
-import md5
+import hashlib
 import fnmatch
 import argparse
 
@@ -138,32 +138,24 @@ sizes = filesBySize.keys()
 sizes.sort(reverse=True)
 for k in sizes:
     inFiles = filesBySize[k]
-    outFiles = []
     hashes = {}
     if len(inFiles) is 1: continue
     if args.verbose:
         print >>sys.stderr, 'Testing %d files of size %d...' % (len(inFiles), k)
     for fileName in inFiles:
-        try:
-            if not os.path.isfile(fileName):
-                continue
-            aFile = file(fileName, 'r')
-            hasher = md5.new(aFile.read(1024))
+        if not os.path.isfile(fileName):
+            continue
+        with file(fileName, 'r') as aFile:
+            hasher = hashlib.sha256(aFile.read(1024))
             hashValue = hasher.digest()
             if hashes.has_key(hashValue):
-                x = hashes[hashValue]
-                if type(x) is not trueType:
-                    outFiles.append(hashes[hashValue])
-                    hashes[hashValue] = True
-                outFiles.append(fileName)
+                hashes[hashValue].append(fileName)
             else:
-                hashes[hashValue] = fileName
-            aFile.close()
-        except IOError:
-            continue
-    if len(outFiles):
-        potentialDupes.append(outFiles)
-        potentialCount = potentialCount + len(outFiles)
+                hashes[hashValue] = [fileName]
+    for outFiles in hashes.values():
+        if len(outFiles)>1:
+            potentialDupes.append(outFiles)
+            potentialCount = potentialCount + len(outFiles)
 del filesBySize
 
 print >>sys.stderr, 'Found %d sets of potential dupes...' % potentialCount
@@ -171,43 +163,41 @@ print >>sys.stderr, 'Scanning for real dupes...'
 
 dupes = []
 for aSet in potentialDupes:
-    outFiles = []
     hashes = {}
     for fileName in aSet:
-        try:
-            if args.verbose:
-                print >>sys.stderr, 'Scanning file "%s"...' % fileName
-            aFile = file(fileName, 'r')
-            hasher = md5.new()
+        if args.verbose:
+            print >>sys.stderr, 'Scanning file "%s"...' % fileName
+        with file(fileName, 'r') as aFile:
+            hasher = hashlib.sha256()
             while True:
                 r = aFile.read(4096)
                 if not len(r):
                     break
                 hasher.update(r)
-            aFile.close()
             hashValue = hasher.digest()
             if hashes.has_key(hashValue):
-                if not len(outFiles):
-                    outFiles.append(hashes[hashValue])
-                outFiles.append(fileName)
+                hashes[hashValue].append(fileName)
             else:
-                hashes[hashValue] = fileName
-        except IOError:
-            continue
-    if len(outFiles):
-        if args.long is None:
+                hashes[hashValue] = [fileName]
+    for outFiles in hashes.values():
+        if len(outFiles)>1:
+            if args.long is not None:
+                outFiles.sort(key=len, reverse=args.long)
             dupes.append(sorted(outFiles,
-                key=multi_match_filter_fn(args.notoriginal), reverse=True))
-        else:
-            dupes.append(sorted(sorted(outFiles, key=len, reverse=args.long),
-                key=multi_match_filter_fn(args.notoriginal), reverse=True))
+                                key=multi_match_filter_fn(args.notoriginal),
+                                reverse=True))
 
 for d in dupes:
     if args.script:
         original = d[0]
         print '# Assuming %s is the original.' % original
         for f in d[1:]:
-            # The following line still has problems with literal “'” and “"” in file names.
+            # The following line breaks for stuff like “'”,  “"” and “$” in file names.
+            # %r of strings seems to use “'” by default, and seems to
+            # switch to “"” for strings containing “'”.  This does not make it
+            # better, because then the `COPY=%r` part would work, but all variants of `rm "$COPY"` would break.
+            # Also, %r makes me not like accented characters.
+            # So, what to do?
             print 'COPY="%s" ; rm "$COPY" && ln -s "%s" "$COPY"' % (f, relpath_unless_via_root(original, os.path.dirname(f), args.paths))
     else:
         print "===="
