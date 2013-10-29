@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #! -*- encoding: utf-8 -*-
 
 LICENSE = """Copyright (c) 2012, Gereon Kaiping <anaphory@yahoo.de>
@@ -31,6 +31,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."""
 import os, os.path
 import sys
 import stat
+import shlex
 import hashlib
 import fnmatch
 import argparse
@@ -74,6 +75,7 @@ parser.add_argument('--notoriginal', '-n',
                     type=str,
                     default=[],
                     help='assume that files matching TEXT are copies')
+## TODO: this option does not seem to work. Fix?
 
 parser.add_argument('--exclude', '-x',
                     action='append',
@@ -91,8 +93,8 @@ filesBySize = {}
 
 def files_by_size(path, filter_fn=(lambda x: True), min_size=100, follow_links=False, recursive=True, extend={}):
     if args.verbose:
-        print >>sys.stderr, 'Stepping into directory "%s"....' % path
-    files = filter(filter_fn, os.listdir(path))
+        print('Stepping into directory "%s"....' % path, file=sys.stderr)
+    files = list(filter(filter_fn, os.listdir(path)))
     for f in files:
         f=os.path.join(path, f)
         try:
@@ -124,62 +126,65 @@ def relpath_unless_via_root(path, start=".", roots=["/"]):
     return relpath
 
 for x in args.paths:
-    print >>sys.stderr, 'Scanning directory "%s"....' % x
+    print('Scanning directory "%s"....' % x, file=sys.stderr)
     files_by_size(x,
                   filter_fn=multi_match_filter_fn(),
                   recursive=args.recursive,
                   extend=filesBySize)
 
-print >>sys.stderr, 'Finding potential dupes...'
+print('Finding potential dupes...', file=sys.stderr)
 potentialDupes = []
 potentialCount = 0
 trueType = type(True)
-sizes = filesBySize.keys()
+sizes = list(filesBySize.keys())
 sizes.sort(reverse=True)
 for k in sizes:
     inFiles = filesBySize[k]
     hashes = {}
     if len(inFiles) is 1: continue
     if args.verbose:
-        print >>sys.stderr, 'Testing %d files of size %d...' % (len(inFiles), k)
+        print('Testing %d files of size %d...' % (len(inFiles), k), file=sys.stderr)
     for fileName in inFiles:
         if not os.path.isfile(fileName):
             continue
-        with file(fileName, 'r') as aFile:
+        with open(fileName, 'rb') as aFile:
             hasher = hashlib.sha256(aFile.read(1024))
             hashValue = hasher.digest()
-            if hashes.has_key(hashValue):
+            if hashValue in hashes:
                 hashes[hashValue].append(fileName)
             else:
                 hashes[hashValue] = [fileName]
-    for outFiles in hashes.values():
+    for outFiles in list(hashes.values()):
         if len(outFiles)>1:
             potentialDupes.append(outFiles)
             potentialCount = potentialCount + len(outFiles)
 del filesBySize
 
-print >>sys.stderr, 'Found %d sets of potential dupes...' % potentialCount
-print >>sys.stderr, 'Scanning for real dupes...'
+print('Found %d sets of potential dupes...' % potentialCount, file=sys.stderr)
+print('Scanning for real dupes...', file=sys.stderr)
 
 dupes = []
 for aSet in potentialDupes:
     hashes = {}
     for fileName in aSet:
         if args.verbose:
-            print >>sys.stderr, 'Scanning file "%s"...' % fileName
-        with file(fileName, 'r') as aFile:
-            hasher = hashlib.sha256()
-            while True:
-                r = aFile.read(4096)
-                if not len(r):
-                    break
-                hasher.update(r)
-            hashValue = hasher.digest()
-            if hashes.has_key(hashValue):
-                hashes[hashValue].append(fileName)
-            else:
-                hashes[hashValue] = [fileName]
-    for outFiles in hashes.values():
+            print('Scanning file "%s"...' % fileName, file=sys.stderr)
+        try:
+            with open(fileName, 'rb') as aFile:
+                hasher = hashlib.sha256()
+                while True:
+                    r = aFile.read(4096)
+                    if not len(r):
+                        break
+                    hasher.update(r)
+                hashValue = hasher.digest()
+                if hashValue in hashes:
+                    hashes[hashValue].append(fileName)
+                else:
+                    hashes[hashValue] = [fileName]
+        except (IOError, OSError):
+            continue
+    for outFiles in list(hashes.values()):
         if len(outFiles)>1:
             if args.long is not None:
                 outFiles.sort(key=len, reverse=args.long)
@@ -190,15 +195,27 @@ for aSet in potentialDupes:
 for d in dupes:
     if args.script:
         original = d[0]
-        print '# Assuming %s is the original.' % original
+        try:
+            print('# Assuming {:s} is the original.'.format(repr(original)))
+            print('ORIGINAL={:s}'.format(shlex.quote(original)))
+            print('for FILE in {:s}'.format(" ".join(map(shlex.quote, d))))
+        except UnicodeEncodeError:
+            print('# Problem with encoding of file set {:s}'.format(repr(original)))
+            continue
+        print('  do')
+        print('  if [ "$FILE" != "$ORIGINAL" ]')
+        print('  then')
+        print('    rm "$FILE"')
+        print('  fi')
+        print('done')
         for f in d[1:]:
-            # The following line breaks for stuff like “'”,  “"” and “$” in file names.
-            # %r of strings seems to use “'” by default, and seems to
-            # switch to “"” for strings containing “'”.  This does not make it
-            # better, because then the `COPY=%r` part would work, but all variants of `rm "$COPY"` would break.
-            # Also, %r makes me not like accented characters.
-            # So, what to do?
-            print 'COPY="%s" ; rm "$COPY" && ln -s "%s" "$COPY"' % (f, relpath_unless_via_root(original, os.path.dirname(f), args.paths))
+            print('# ln -s {:s} {:s}'.format(
+                shlex.quote(
+                    relpath_unless_via_root(
+                        original,
+                        os.path.dirname(f),
+                        args.paths)),
+                f))
+        print()
     else:
-        print "===="
-        print "\n".join(d)
+        print("\n".join(dupes), end="\n\n")
