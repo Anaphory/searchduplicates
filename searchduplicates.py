@@ -75,7 +75,6 @@ parser.add_argument('--notoriginal', '-n',
                     type=str,
                     default=[],
                     help='assume that files matching TEXT are copies')
-## TODO: this option does not seem to work. Fix?
 
 parser.add_argument('--exclude', '-x',
                     action='append',
@@ -117,6 +116,9 @@ def files_by_size(path, filter_fn=(lambda x: True), min_size=100, follow_links=F
 
 def multi_match_filter_fn(match=args.exclude):
     return lambda x: not any([fnmatch.fnmatchcase(x, exclude) for exclude in match])
+
+def notoriginal_penalty(match=args.notoriginal):
+    return lambda x: sum(exclude in x for exclude in match)    
 
 def relpath_unless_via_root(path, start=".", roots=["/"]):
     relpath = os.path.relpath(path, start)
@@ -189,8 +191,7 @@ for aSet in potentialDupes:
             if args.long is not None:
                 outFiles.sort(key=len, reverse=args.long)
             dupes.append(sorted(outFiles,
-                                key=multi_match_filter_fn(args.notoriginal),
-                                reverse=True))
+                                key=notoriginal_penalty(args.notoriginal)))
 
 for d in dupes:
     if args.script:
