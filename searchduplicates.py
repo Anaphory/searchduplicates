@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-#! -*- encoding: utf-8 -*-
+# -*- encoding: utf-8 -*-
 
 LICENSE = """Copyright (c) 2012, Gereon Kaiping <anaphory@yahoo.de>
 All rights reserved.
@@ -219,4 +219,8 @@ for d in dupes:
                 f))
         print()
     else:
-        print("\n".join(dupes), end="\n====\n")
+        try:
+            print("\n".join(d), end="\n====\n")
+        except UnicodeEncodeError:
+            print("#UnicodeEncodeError:")
+            print("\n".join(map(repr, d)), end="\n====\n")
