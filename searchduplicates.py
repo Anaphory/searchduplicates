@@ -82,6 +82,11 @@ parser.add_argument('--exclude', '-x',
                     default=[],
                     help='exclude files matching TEXT')
 
+parser.add_argument('--minsize', '-m',
+                    type=int,
+                    default=100,
+                    help='Only check files of size at least MINSIZE bytes')
+
 # TODO: -x and -n behave differently:
 # -x cares only for the 'basename', -n for the full name.
 # Thus, -x .git behaves similarly to -n */.git
@@ -131,6 +136,7 @@ for x in args.paths:
     print('Scanning directory "%s"....' % x, file=sys.stderr)
     files_by_size(x,
                   filter_fn=multi_match_filter_fn(),
+                  min_size=args.minsize,
                   recursive=args.recursive,
                   extend=filesBySize)
 
