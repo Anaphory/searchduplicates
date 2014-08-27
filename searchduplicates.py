@@ -225,4 +225,7 @@ for d in dupes:
                 f))
         print()
     else:
-        print("\n".join(dupes), end="\n====\n")
+        try:
+            print("\n".join(d), end="\n====\n")
+        except UnicodeEncodeError:
+            print("\n".join([repr(file) for file in d]), end="\n====\n")
