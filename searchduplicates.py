@@ -147,7 +147,6 @@ for x in args.paths:
     print('Scanning directory "%s"....' % x, file=sys.stderr)
     files_by_size(x,
                   min_size=args.min_size,
-                  filter_fn=multi_match_filter_fn(),
                   recursive=args.recursive,
                   extend=filesBySize,
                   exclude_filter_fn=multi_match_filter_fn(),
