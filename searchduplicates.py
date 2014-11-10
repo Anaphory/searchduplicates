@@ -88,7 +88,7 @@ parser.add_argument('--exclude', '-x',
                     default=[],
                     help='exclude files matching TEXT')
 
-parser.add_argument('--min-size', '-m'
+parser.add_argument('--min-size', '-m',
                     type=int,
                     default=1,
                     help='ignore files smaller than MIN_SIZE')
@@ -146,12 +146,8 @@ def relpath_unless_via_root(path, start=".", roots=["/"]):
 for x in args.paths:
     print('Scanning directory "%s"....' % x, file=sys.stderr)
     files_by_size(x,
-<<<<<<< HEAD
                   min_size=args.min_size,
                   filter_fn=multi_match_filter_fn(),
-=======
-                  min_size=args.minsize,
->>>>>>> e945beb1e3f35502d2877c95a0f742de85437e01
                   recursive=args.recursive,
                   extend=filesBySize,
                   exclude_filter_fn=multi_match_filter_fn(),
