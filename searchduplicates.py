@@ -82,6 +82,12 @@ parser.add_argument('--exclude', '-x',
                     default=[],
                     help='exclude files matching TEXT')
 
+parser.add_argument('--min-size',
+                    type=int,
+                    default=1,
+                    help='ignore files smaller than MIN_SIZE')
+
+
 # TODO: -x and -n behave differently:
 # -x cares only for the 'basename', -n for the full name.
 # Thus, -x .git behaves similarly to -n */.git
@@ -130,6 +136,7 @@ def relpath_unless_via_root(path, start=".", roots=["/"]):
 for x in args.paths:
     print('Scanning directory "%s"....' % x, file=sys.stderr)
     files_by_size(x,
+                  min_size=args.min_size,
                   filter_fn=multi_match_filter_fn(),
                   recursive=args.recursive,
                   extend=filesBySize)
