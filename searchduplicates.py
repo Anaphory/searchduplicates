@@ -76,6 +76,12 @@ parser.add_argument('--notoriginal', '-n',
                     default=[],
                     help='assume that files matching TEXT are copies')
 
+parser.add_argument('--include', '-i',
+                    action='append',
+                    type=str,
+                    default=[],
+                    help='consider only files matching TEXT (in all directories)')
+
 parser.add_argument('--exclude', '-x',
                     action='append',
                     type=str,
@@ -87,25 +93,33 @@ parser.add_argument('--minsize', '-m',
                     default=100,
                     help='Only check files of size at least MINSIZE bytes')
 
-# TODO: -x and -n behave differently:
-# -x cares only for the 'basename', -n for the full name.
+# TODO: -x, -i and -n behave differently:
+# -x and -i care only for the 'basename'.
+# -x excludes directories, -i only checks actual files we might care about.
+# -n checks the full file name, as absolute or as relative as the PATH argument.
 # Thus, -x .git behaves similarly to -n */.git
 
 args = parser.parse_args()
 
 filesBySize = {}
 
-def files_by_size(path, filter_fn=(lambda x: True), min_size=100, follow_links=False, recursive=True, extend={}):
+def files_by_size(path, min_size=100, follow_links=False, recursive=True, extend=None,
+                  exclude_filter_fn=(lambda x: True), no_include_filter_fn=(lambda x: False)):
+    if extend is None:
+        extend = {}
     if args.verbose:
         print('Stepping into directory "%s"....' % path, file=sys.stderr)
-    files = list(filter(filter_fn, os.listdir(path)))
+    files = filter(exclude_filter_fn, os.listdir(path))
     for f in files:
         f=os.path.join(path, f)
         try:
+            if recursive and os.path.isdir(f):
+                files_by_size(f, min_size, follow_links, True, extend,
+                              exclude_filter_fn, no_include_filter_fn)
+            if no_include_filter_fn(f):
+                continue
             if not follow_links and os.path.islink(f):
                 continue
-            if recursive and os.path.isdir(f):
-                files_by_size(f, filter_fn, min_size, follow_links, True, extend)
             if not os.path.isfile(f):
                 continue
             size = os.stat(f)[stat.ST_SIZE]
@@ -123,7 +137,7 @@ def multi_match_filter_fn(match=args.exclude):
     return lambda x: not any([fnmatch.fnmatchcase(x, exclude) for exclude in match])
 
 def notoriginal_penalty(match=args.notoriginal):
-    return lambda x: sum(exclude in x for exclude in match)    
+    return lambda x: sum(fnmatch.fnmatchcase(x, exclude) for exclude in match)    
 
 def relpath_unless_via_root(path, start=".", roots=["/"]):
     relpath = os.path.relpath(path, start)
@@ -135,10 +149,11 @@ def relpath_unless_via_root(path, start=".", roots=["/"]):
 for x in args.paths:
     print('Scanning directory "%s"....' % x, file=sys.stderr)
     files_by_size(x,
-                  filter_fn=multi_match_filter_fn(),
                   min_size=args.minsize,
                   recursive=args.recursive,
-                  extend=filesBySize)
+                  extend=filesBySize,
+                  exclude_filter_fn=multi_match_filter_fn(),
+                  no_include_filter_fn=multi_match_filter_fn(args.include))
 
 print('Finding potential dupes...', file=sys.stderr)
 potentialDupes = []
