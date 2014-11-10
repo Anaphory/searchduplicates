@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-#! -*- encoding: utf-8 -*-
+# -*- encoding: utf-8 -*-
 
 LICENSE = """Copyright (c) 2012, Gereon Kaiping <anaphory@yahoo.de>
 All rights reserved.
@@ -170,13 +170,16 @@ for k in sizes:
     for fileName in inFiles:
         if not os.path.isfile(fileName):
             continue
-        with open(fileName, 'rb') as aFile:
-            hasher = hashlib.sha256(aFile.read(1024))
-            hashValue = hasher.digest()
-            if hashValue in hashes:
-                hashes[hashValue].append(fileName)
-            else:
-                hashes[hashValue] = [fileName]
+        try:
+            with open(fileName, 'rb') as aFile:
+                hasher = hashlib.sha256(aFile.read(1024))
+                hashValue = hasher.digest()
+                if hashValue in hashes:
+                    hashes[hashValue].append(fileName)
+                else:
+                    hashes[hashValue] = [fileName]
+        except PermissionError:
+            continue
     for outFiles in list(hashes.values()):
         if len(outFiles)>1:
             potentialDupes.append(outFiles)
@@ -205,7 +208,7 @@ for aSet in potentialDupes:
                     hashes[hashValue].append(fileName)
                 else:
                     hashes[hashValue] = [fileName]
-        except (IOError, OSError):
+        except (IOError, OSError, PermissionError):
             continue
     for outFiles in list(hashes.values()):
         if len(outFiles)>1:
@@ -243,4 +246,6 @@ for d in dupes:
         try:
             print("\n".join(d), end="\n====\n")
         except UnicodeEncodeError:
+            print("#UnicodeEncodeError:")
             print("\n".join([repr(file) for file in d]), end="\n====\n")
+
