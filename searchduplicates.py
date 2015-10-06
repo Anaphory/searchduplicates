@@ -70,28 +70,36 @@ parser.add_argument('--verbose', '-v',
                     action='store_const',
                     default=False, const=True,)
 
-parser.add_argument('--notoriginal', '-n',
+original = parser.add_argument_group("Original/Copy sorting arguments", "File names are matched against ORIGINAL and NOTORIGINAL entries, scoring one point for each ORIGINAL and minus one point for each NOTORIGINAL matched. The file with the highest score is assumed to be the original, for deletion and linking purposes.")
+
+original.add_argument('--original', '-o',
                     action='append',
                     type=str,
                     default=[],
-                    help='assume that files matching TEXT are copies')
+                    help='assume that files matching ORIGINAL are originals')
+
+original.add_argument('--notoriginal', '-n',
+                    action='append',
+                    type=str,
+                    default=[],
+                    help='assume that files matching NOTORIGINAL are copies')
 
 parser.add_argument('--include', '-i',
                     action='append',
                     type=str,
                     default=[],
-                    help='consider only files matching TEXT (in all directories)')
+                    help='consider only files matching INCLUDE (in all directories)')
 
 parser.add_argument('--exclude', '-x',
                     action='append',
                     type=str,
                     default=[],
-                    help='exclude files matching TEXT')
+                    help='exclude files matching EXCLUDE')
 
 parser.add_argument('--min-size', '-m',
                     type=int,
                     default=1,
-                    help='ignore files smaller than MIN_SIZE')
+                    help='ignore files smaller than MIN_SIZE bytes')
 
 
 # Thus, -x .git behaves similarly to -n */.git
@@ -108,14 +116,14 @@ def files_by_size(path, min_size=100, follow_links=False, recursive=True, extend
         print('Stepping into directory "%s"....' % path, file=sys.stderr)
     files = filter(exclude_filter_fn, os.listdir(path))
     for f in files:
-        f=os.path.join(path, f)
+        f = os.path.realpath(os.path.join(path, f))
         try:
+            if not follow_links and os.path.islink(f):
+                continue
             if recursive and os.path.isdir(f):
                 files_by_size(f, min_size, follow_links, True, extend,
                               exclude_filter_fn, no_include_filter_fn)
             if no_include_filter_fn(f):
-                continue
-            if not follow_links and os.path.islink(f):
                 continue
             if not os.path.isfile(f):
                 continue
@@ -123,9 +131,9 @@ def files_by_size(path, min_size=100, follow_links=False, recursive=True, extend
             if size < min_size:
                 continue
             try:
-                extend[size].append(f)
+                extend[size].add(f)
             except KeyError:
-                extend[size] = [f]
+                extend[size] = set([f])
         except (IOError, OSError):
             continue
     return extend
@@ -133,8 +141,9 @@ def files_by_size(path, min_size=100, follow_links=False, recursive=True, extend
 def multi_match_filter_fn(match=args.exclude):
     return lambda x: not any([fnmatch.fnmatchcase(x, exclude) for exclude in match])
 
-def notoriginal_penalty(match=args.notoriginal):
-    return lambda x: sum(fnmatch.fnmatchcase(x, exclude) for exclude in match)    
+def original_score(pro=args.original, contra=args.notoriginal):
+    return lambda x: (sum(fnmatch.fnmatchcase(x, exclude) for exclude in contra)
+                      - sum(fnmatch.fnmatchcase(x, exclude) for exclude in pro))
 
 def relpath_unless_via_root(path, start=".", roots=["/"]):
     relpath = os.path.relpath(path, start)
@@ -216,7 +225,7 @@ for aSet in potentialDupes:
             if args.long is not None:
                 outFiles.sort(key=len, reverse=args.long)
             dupes.append(sorted(outFiles,
-                                key=notoriginal_penalty(args.notoriginal)))
+                                key=original_score(args.notoriginal)))
 
 for d in dupes:
     if args.script:
