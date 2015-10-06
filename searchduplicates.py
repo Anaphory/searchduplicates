@@ -145,12 +145,16 @@ def relpath_unless_via_root(path, start=".", roots=["/"]):
 
 for x in args.paths:
     print('Scanning directory "%s"....' % x, file=sys.stderr)
+    if args.include:
+        no_include_filter_fn = multi_match_filter_fn(args.include)
+    else:
+        no_include_filter_fn = lambda x: False
     files_by_size(x,
                   min_size=args.min_size,
                   recursive=args.recursive,
                   extend=filesBySize,
                   exclude_filter_fn=multi_match_filter_fn(),
-                  no_include_filter_fn=multi_match_filter_fn(args.include))
+                  no_include_filter_fn=no_include_filter_fn)
 
 print('Finding potential dupes...', file=sys.stderr)
 potentialDupes = []
