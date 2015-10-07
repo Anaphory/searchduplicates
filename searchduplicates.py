@@ -225,7 +225,7 @@ for aSet in potentialDupes:
             if args.long is not None:
                 outFiles.sort(key=len, reverse=args.long)
             dupes.append(sorted(outFiles,
-                                key=original_score(args.notoriginal)))
+                                key=original_score(args.original, args.notoriginal)))
 
 for d in dupes:
     if args.script:
@@ -250,7 +250,7 @@ for d in dupes:
                         original,
                         os.path.dirname(f),
                         args.paths)),
-                f))
+                shlex.quote(f)))
         print()
     else:
         try:
