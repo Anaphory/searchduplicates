@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- encoding: utf-8 -*-
 
-LICENSE = """Copyright (c) 2012, Gereon Kaiping <anaphory@yahoo.de>
+LICENSE = """Copyright (c) 2015, Gereon Kaiping <anaphory@yahoo.de>
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -146,9 +146,13 @@ def original_score(pro=args.original, contra=args.notoriginal):
                       - sum(fnmatch.fnmatchcase(x, exclude) for exclude in pro))
 
 def relpath_unless_via_root(path, start=".", roots=["/"]):
+    """Return the relative path from start to path, unless the relative
+    path traverses via an element of roots, in which case return the
+    absolute path."""
     relpath = os.path.relpath(path, start)
     for root in roots:
         if os.path.relpath(path, root) in relpath:
+            #TODO: There is an unwise assumption about the behaviour of paths in this condition.
             return os.path.abspath(path)
     return relpath
 
