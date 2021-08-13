@@ -174,7 +174,7 @@ sizes.sort(reverse=True)
 for k in sizes:
     inFiles = filesBySize[k]
     hashes = {}
-    if len(inFiles) is 1: continue
+    if len(inFiles) == 1: continue
     if args.verbose:
         print('Testing %d files of size %d...' % (len(inFiles), k), file=sys.stderr)
     for fileName in inFiles:
