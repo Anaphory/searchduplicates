@@ -294,6 +294,7 @@ if __name__ == "__main__":
     logging.info("Found %d sets of potential dupes...", potentialCount)
     logging.info("Scanning for real dupes...")
 
+    dupes = []
     for aSet in tqdm.tqdm(potentialDupes):
         hashes = {}
         for filename in aSet:
