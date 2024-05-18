@@ -324,7 +324,13 @@ if __name__ == "__main__":
                         key=lambda p: (len(p.parts), len(str(p))), reverse=args.long
                     )
                 dupes.append(
-                    sorted(outFiles, key=make_score(args.original, args.notoriginal))
+                    sorted(
+                        outFiles,
+                        key=make_score(
+                            [re.compile(x) for x in args.original],
+                            [re.compile(x) for x in args.notoriginal],
+                        ),
+                    )
                 )
 
     for group in dupes:
