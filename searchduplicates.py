@@ -13,7 +13,7 @@ import typing
 import tqdm
 from pathlib import Path
 
-LICENSE = """Copyright (c) 2015, Gereon Kaiping <anaphory@yahoo.de>
+LICENSE = """Copyright (c) 2015, 2024, Gereon Kaiping <gereon.kaiping@gmail.com>
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
