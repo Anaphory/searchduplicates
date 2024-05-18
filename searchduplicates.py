@@ -6,6 +6,7 @@ import fnmatch
 import hashlib
 import logging
 import os
+import re
 import shlex
 import stat
 import sys
@@ -112,7 +113,7 @@ def parser() -> argparse.ArgumentParser:
         action="append",
         type=str,
         default=[],
-        help="assume that files matching ORIGINAL are originals",
+        help="assume that files matching the regex ORIGINAL are originals",
     )
     original.add_argument(
         "--notoriginal",
@@ -120,7 +121,7 @@ def parser() -> argparse.ArgumentParser:
         action="append",
         type=str,
         default=[],
-        help="assume that files matching NOTORIGINAL are copies",
+        help="assume that files matching the regex NOTORIGINAL are copies",
     )
 
     parser.add_argument(
@@ -131,7 +132,6 @@ def parser() -> argparse.ArgumentParser:
         default=[],
         help="consider only files matching INCLUDE (in all directories)",
     )
-    # Thus, -x .git behaves similarly to -n */.git
     parser.add_argument(
         "--exclude",
         "-x",
@@ -212,7 +212,9 @@ def make_filter(include, exclude) -> typing.Callable[[Path], bool]:
 
 def make_score(pro, contra):
     def score(p: Path) -> int:
-        return sum(p.match(i) for i in contra) - sum(p.match(i) for i in pro)
+        return sum(bool(re.search(i, str(p))) for i in contra) - sum(
+            bool(re.search(i, str(p))) for i in pro
+        )
 
     return score
 
@@ -249,9 +251,9 @@ if __name__ == "__main__":
     args = parser().parse_args()
     logging.basicConfig(level=logging.INFO)
 
-    files_by_size_dict: typing.DefaultDict[
-        typing.Optional[int], set[Path]
-    ] = typing.DefaultDict(set)
+    files_by_size_dict: typing.DefaultDict[typing.Optional[int], set[Path]] = (
+        typing.DefaultDict(set)
+    )
     visited_directories = set()
 
     for x in args.paths:
@@ -322,9 +324,7 @@ if __name__ == "__main__":
                         key=lambda p: (len(p.parts), len(str(p))), reverse=args.long
                     )
                 dupes.append(
-                    sorted(
-                        outFiles, key=make_score(args.original, args.notoriginal)
-                    )
+                    sorted(outFiles, key=make_score(args.original, args.notoriginal))
                 )
 
     for group in dupes:
@@ -333,7 +333,11 @@ if __name__ == "__main__":
             try:
                 print("# Assuming {:} is the original.".format(original))
                 print("ORIGINAL={:s}".format(shlex.quote(str(original))))
-                print("for FILE in \\\n    {:s}".format("\\\n    ".join([shlex.quote(str(p)) for p in group])))
+                print(
+                    "for FILE in \\\n    {:s}".format(
+                        "\\\n    ".join([shlex.quote(str(p)) for p in group])
+                    )
+                )
             except UnicodeEncodeError:
                 print("# Problem with encoding of file set {:s}".format(repr(original)))
                 continue
@@ -346,11 +350,9 @@ if __name__ == "__main__":
             for f in group[1:]:
                 print(
                     "# ln -s {:s} {:s}".format(
-                        shlex.quote(str(
-                            relpath_unless_via_root(
-                                original, f.parent, args.paths
-                            )
-                        )),
+                        shlex.quote(
+                            str(relpath_unless_via_root(original, f.parent, args.paths))
+                        ),
                         shlex.quote(str(f)),
                     )
                 )
