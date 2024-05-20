@@ -4,6 +4,7 @@
 import argparse
 import fnmatch
 import hashlib
+import io
 import logging
 import os
 import re
@@ -247,6 +248,41 @@ def relpath_unless_via_root(
     return relpath
 
 
+def parallel_compare(
+    file_objects: list[tuple[str, io.BufferedIOBase]], length: int = 4096
+):
+    """Read files in parallel, checking whether they differ.
+
+    >>> for group in parallel_compare([
+    ...   (1, BytesIO(b"file content")),
+    ...   (2, BytesIO(b"file content")),
+    ...   (3, BytesIO(b"file contents")),
+    ...   (4, BytesIO(b"file contents")),
+    ...   (5, BytesIO(b"file content is this"))],
+    ...  2)):
+    ...   print(group)
+    {1, 2}
+    {3, 4}
+    {5}
+
+    """
+    file_data: typing.DefaultDict[bytes, list[tuple[str, io.BufferedIOBase]]]
+    while True:
+        file_data = typing.DefaultDict(list)
+        for filename, file in file_objects:
+            file_data[file.read(length)].append((filename, file))
+        if finished := file_data.pop(b"", []):
+            finished_group = [filename for filename, _ in finished]
+            yield finished_group
+        if not file_data:
+            return
+        if len(file_data) > 1:
+            for file_set in file_data.values():
+                for group in parallel_compare(file_set, length):
+                    yield group
+            return
+
+
 if __name__ == "__main__":
     args = parser().parse_args()
     logging.basicConfig(level=logging.INFO)
@@ -282,8 +318,9 @@ if __name__ == "__main__":
                 continue
             try:
                 with filename.open("rb") as aFile:
-                    hasher = hashlib.sha256(aFile.read(1024))
-                    hashValue = hasher.digest()
+                    # hasher = hashlib.sha256(aFile.read(1024))
+                    # hashValue = hasher.digest()
+                    hashValue = hash(aFile.read(1024))
                     hashes[hashValue].append(filename)
             except PermissionError:
                 continue
@@ -298,26 +335,14 @@ if __name__ == "__main__":
 
     dupes = []
     for aSet in tqdm.tqdm(potentialDupes):
-        hashes = {}
-        for filename in aSet:
-            if args.verbose:
-                logging.debug('Scanning file "%s"...' % filename, file=sys.stderr)
-            try:
-                with open(filename, "rb") as aFile:
-                    hasher = hashlib.sha256()
-                    while True:
-                        r = aFile.read(4096)
-                        if not len(r):
-                            break
-                        hasher.update(r)
-                    hashValue = hasher.digest()
-                    if hashValue in hashes:
-                        hashes[hashValue].append(filename)
-                    else:
-                        hashes[hashValue] = [filename]
-            except (IOError, OSError, PermissionError):
-                continue
-        for outFiles in list(hashes.values()):
+        if args.verbose:
+            logging.debug("Scanning files %s..." % aSet, file=sys.stderr)
+        try:
+            file_objects = [(filename, open(filename, "rb")) for filename in aSet]
+            groups = list(parallel_compare(file_objects))
+        except (IOError, OSError, PermissionError):
+            continue
+        for outFiles in groups:
             if len(outFiles) > 1:
                 if args.long is not None:
                     outFiles.sort(
