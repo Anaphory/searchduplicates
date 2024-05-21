@@ -266,6 +266,9 @@ def parallel_compare(
     {5}
 
     """
+    if len(file_objects) <= 1:
+        yield [file_objects[0][0]]
+        return
     file_data: typing.DefaultDict[bytes, list[tuple[str, io.BufferedIOBase]]]
     while True:
         file_data = typing.DefaultDict(list)
@@ -306,35 +309,16 @@ if __name__ == "__main__":
     logging.info("Finding potential dupes...")
     potentialDupes = []
     potentialCount = 0
-    del files_by_size_dict[None]
-    for k in tqdm.tqdm(sorted(files_by_size_dict.keys(), reverse=True)):
-        inFiles = files_by_size_dict[k]
-        hashes = typing.DefaultDict(list)
-        if len(inFiles) == 1:
-            continue
-        logging.debug("Testing %d files of size %d...", len(inFiles), k)
-        for filename in inFiles:
-            if not filename.is_file():
-                continue
-            try:
-                with filename.open("rb") as aFile:
-                    # hasher = hashlib.sha256(aFile.read(1024))
-                    # hashValue = hasher.digest()
-                    hashValue = hash(aFile.read(1024))
-                    hashes[hashValue].append(filename)
-            except PermissionError:
-                continue
-        for outFiles in hashes.values():
-            if len(outFiles) > 1:
-                potentialDupes.append(outFiles)
-                potentialCount = potentialCount + len(outFiles)
-    del files_by_size_dict
-
-    logging.info("Found %d sets of potential dupes...", potentialCount)
-    logging.info("Scanning for real dupes...")
-
     dupes = []
-    for aSet in tqdm.tqdm(potentialDupes):
+    del files_by_size_dict[None]
+    scoring_function = make_score(
+        [re.compile(x) for x in args.original],
+        [re.compile(x) for x in args.notoriginal],
+    )
+    for k in tqdm.tqdm(sorted(files_by_size_dict.keys(), reverse=True)):
+        aSet = files_by_size_dict[k]
+        if len(aSet) <= 1:
+            continue
         if args.verbose:
             logging.debug("Scanning files %s..." % aSet, file=sys.stderr)
         try:
@@ -342,57 +326,62 @@ if __name__ == "__main__":
             groups = list(parallel_compare(file_objects))
         except (IOError, OSError, PermissionError):
             continue
+        finally:
+            for _, file in file_objects:
+                file.close()
         for outFiles in groups:
             if len(outFiles) > 1:
                 if args.long is not None:
                     outFiles.sort(
                         key=lambda p: (len(p.parts), len(str(p))), reverse=args.long
                     )
-                dupes.append(
-                    sorted(
-                        outFiles,
-                        key=make_score(
-                            [re.compile(x) for x in args.original],
-                            [re.compile(x) for x in args.notoriginal],
-                        ),
-                    )
+                group = sorted(
+                    outFiles,
+                    key=scoring_function,
                 )
 
-    for group in dupes:
-        if args.script:
-            original = group[0]
-            try:
-                print("# Assuming {:} is the original.".format(original))
-                print("ORIGINAL={:s}".format(shlex.quote(str(original))))
-                print(
-                    "for FILE in \\\n    {:s}".format(
-                        "\\\n    ".join([shlex.quote(str(p)) for p in group])
-                    )
-                )
-            except UnicodeEncodeError:
-                print("# Problem with encoding of file set {:s}".format(repr(original)))
-                continue
-            print("  do")
-            print('  if [ "${FILE}" != "${ORIGINAL}" ]')
-            print("  then")
-            print('    rm "${FILE}"')
-            print("  fi")
-            print("done")
-            for f in group[1:]:
-                print(
-                    "# ln -s {:s} {:s}".format(
-                        shlex.quote(
-                            str(relpath_unless_via_root(original, f.parent, args.paths))
-                        ),
-                        shlex.quote(str(f)),
-                    )
-                )
-            print()
-        else:
-            try:
-                for d in group:
-                    print(d)
-                print("====")
-            except UnicodeEncodeError:
-                print("#UnicodeEncodeError:")
-                print("\n".join([repr(file) for file in group]), end="\n====\n")
+                if args.script:
+                    original = group[0]
+                    try:
+                        print("# Assuming {:} is the original.".format(original))
+                        print("ORIGINAL={:s}".format(shlex.quote(str(original))))
+                        print(
+                            "for FILE in \\\n    {:s}".format(
+                                "\\\n    ".join([shlex.quote(str(p)) for p in group])
+                            )
+                        )
+                    except UnicodeEncodeError:
+                        print(
+                            "# Problem with encoding of file set {:s}".format(
+                                repr(original)
+                            )
+                        )
+                        continue
+                    print("  do")
+                    print('  if [ "${FILE}" != "${ORIGINAL}" ]')
+                    print("  then")
+                    print('    rm "${FILE}"')
+                    print("  fi")
+                    print("done")
+                    for f in group[1:]:
+                        print(
+                            "ln -s {:s} {:s}".format(
+                                shlex.quote(
+                                    str(
+                                        relpath_unless_via_root(
+                                            original, f.parent, args.paths
+                                        )
+                                    )
+                                ),
+                                shlex.quote(str(f)),
+                            )
+                        )
+                    print()
+                else:
+                    try:
+                        for d in group:
+                            print(d)
+                        print("====")
+                    except UnicodeEncodeError:
+                        print("#UnicodeEncodeError:")
+                        print("\n".join([repr(file) for file in group]), end="\n====\n")
