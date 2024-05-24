@@ -2,20 +2,16 @@
 # -*- encoding: utf-8 -*-
 
 import argparse
-import fnmatch
-import hashlib
 import io
 import logging
-import os
 import re
 import shlex
-import stat
 import sys
 import typing
 import tqdm
 from pathlib import Path
 
-LICENSE = """Copyright (c) 2015, 2024, Gereon Kaiping <gereon.kaiping@gmail.com>
+LICENSE = """Copyright (c) 2015-2024, Gereon Kaiping <gereon.kaiping@gmail.com>
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -159,16 +155,19 @@ def true(p: Path) -> bool:
 
 def files_by_size(
     path: Path,
+    already_visited: set[Path],
     min_size=100,
     follow_links=False,
     recursive=True,
     extend: typing.Optional[typing.DefaultDict[typing.Optional[int], set[Path]]] = None,
     include=true,
 ):
+    if path.resolve() in already_visited:
+        return extend
+    already_visited.add(path.resolve())
+    logging.debug('Stepping into directory "%s"....', path)
     if extend is None:
         extend = typing.DefaultDict(set)
-    if args.verbose:
-        logging.info('Stepping into directory "%s"....', path)
     for f in filter(include, path.iterdir()):
         try:
             if not follow_links and f.is_symlink():
@@ -179,7 +178,15 @@ def files_by_size(
             if recursive and f.is_dir():
                 extend[None].add(f)
                 try:
-                    files_by_size(f, min_size, follow_links, True, extend, include)
+                    files_by_size(
+                        f,
+                        already_visited,
+                        min_size,
+                        follow_links,
+                        True,
+                        extend,
+                        include,
+                    )
                 except (RecursionError, RuntimeError):
                     logging.warning(
                         "Exceeding recursion depth while visiting %s. Do you have a recursive file system?",
@@ -288,17 +295,17 @@ def parallel_compare(
 
 if __name__ == "__main__":
     args = parser().parse_args()
-    logging.basicConfig(level=logging.INFO)
-
-    files_by_size_dict: typing.DefaultDict[typing.Optional[int], set[Path]] = (
-        typing.DefaultDict(set)
-    )
+    logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO)
+    files_by_size_dict: typing.DefaultDict[
+        typing.Optional[int], set[Path]
+    ] = typing.DefaultDict(set)
     visited_directories = set()
 
     for x in args.paths:
         logging.info('Scanning directory "%s"....', x)
         files_by_size(
             x,
+            set(),
             min_size=args.min_size,
             recursive=args.recursive,
             extend=files_by_size_dict,
@@ -319,8 +326,8 @@ if __name__ == "__main__":
         aSet = files_by_size_dict[k]
         if len(aSet) <= 1:
             continue
-        if args.verbose:
-            logging.debug("Scanning files %s..." % aSet, file=sys.stderr)
+        logging.debug("Testing %d files of size %d:", len(inFiles), k)
+        logging.debug("Scanning files %s..." % aSet, file=sys.stderr)
         try:
             file_objects = [(filename, open(filename, "rb")) for filename in aSet]
             groups = list(parallel_compare(file_objects))
