@@ -326,7 +326,7 @@ if __name__ == "__main__":
         aSet = files_by_size_dict[k]
         if len(aSet) <= 1:
             continue
-        logging.debug("Testing %d files of size %d:", len(inFiles), k)
+        logging.debug("Testing %d files of size %d:", len(aSet), k)
         logging.debug("Scanning files %s..." % aSet, file=sys.stderr)
         try:
             file_objects = [(filename, open(filename, "rb")) for filename in aSet]
