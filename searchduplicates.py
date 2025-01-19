@@ -350,13 +350,13 @@ if __name__ == "__main__":
                 if args.script:
                     original = group[0]
                     try:
-                        print("# Assuming {:} is the original.".format(original))
-                        print("ORIGINAL={:s}".format(shlex.quote(str(original))))
                         print(
-                            "for FILE in \\\n    {:s}".format(
-                                "\\\n    ".join([shlex.quote(str(p)) for p in group])
+                            "FILES=(\n   {:s}\n)".format(
+                                "\n    ".join([shlex.quote(str(p)) for p in group])
                             )
                         )
+                        print()
+                        print("# Assuming {:} is the original.".format(original))
                     except UnicodeEncodeError:
                         print(
                             "# Problem with encoding of file set {:s}".format(
@@ -364,25 +364,9 @@ if __name__ == "__main__":
                             )
                         )
                         continue
-                    print("  do")
-                    print('  if [ "${FILE}" != "${ORIGINAL}" ]')
-                    print("  then")
-                    print('    rm "${FILE}"')
-                    print("  fi")
-                    print("done")
-                    for f in group[1:]:
-                        print(
-                            "ln -s {:s} {:s}".format(
-                                shlex.quote(
-                                    str(
-                                        relpath_unless_via_root(
-                                            original, f.parent, args.paths
-                                        )
-                                    )
-                                ),
-                                shlex.quote(str(f)),
-                            )
-                        )
+                    print(
+                        'for FILE in "${FILES[@]:2}"\ndo\n  rm "${FILE}"\n  # ln -s "${FILES[0]}" "${FILE}"\ndone'
+                    )
                     print()
                 else:
                     try:
