@@ -327,7 +327,7 @@ if __name__ == "__main__":
         if len(aSet) <= 1:
             continue
         logging.debug("Testing %d files of size %d:", len(aSet), k)
-        logging.debug("Scanning files %s..." % aSet, file=sys.stderr)
+        logging.debug("Scanning files %s..." % aSet)
         try:
             file_objects = [(filename, open(filename, "rb")) for filename in aSet]
             groups = list(parallel_compare(file_objects))
