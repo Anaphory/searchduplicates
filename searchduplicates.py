@@ -351,12 +351,9 @@ if __name__ == "__main__":
                     original = group[0]
                     try:
                         print(
-                            "FILES=(\n   {:s}\n)".format(
+                            'FILES=(\n   {:s}\n)\nfor FILE in "${{FILES[@]:1}}"\ndo\n  rm "${{FILE}}"\n  # ln -s "${{FILES[0]}}" "${{FILE}}"\ndone'.format(
                                 "\n    ".join([shlex.quote(str(p)) for p in group])
-                            )
-                        )
-                        print()
-                        print("# Assuming {:} is the original.".format(original))
+                            ))
                     except UnicodeEncodeError:
                         print(
                             "# Problem with encoding of file set {:s}".format(
@@ -364,10 +361,6 @@ if __name__ == "__main__":
                             )
                         )
                         continue
-                    print(
-                        'for FILE in "${FILES[@]:2}"\ndo\n  rm "${FILE}"\n  # ln -s "${FILES[0]}" "${FILE}"\ndone'
-                    )
-                    print()
                 else:
                     try:
                         for d in group:
